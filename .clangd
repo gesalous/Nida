@@ -1,0 +1,8 @@
+CompileFlags:
+  Add:
+    - "-I/usr/src/linux-headers-6.8.0-41-generic/include"
+    - "-I/usr/src/linux-headers-6.8.0-41-generic/arch/x86/include"
+    - "-D__KERNEL__"
+    - "-DMODULE"
+Index:
+  Background: Build
