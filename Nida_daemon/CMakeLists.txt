@@ -47,6 +47,57 @@ add_executable(nida_daemon src/nida_daemon.c)
 # Apply common flags
 target_compile_options(nida_daemon PRIVATE ${COMMON_FLAGS})
 
+# Define options for library and include paths
+option(PORTALS_LIB_DIR "Path to the Portals library" "")
+option(PORTALS_INCLUDE_DIR "Path to the Portals include directory" "")
+
+# Find the Portals library
+find_library(
+  PORTALS_LIB
+  NAMES portals
+  PATHS ${PORTALS_LIB_DIR}
+  NO_DEFAULT_PATH)
+
+if(NOT PORTALS_LIB)
+  message(FATAL_ERROR "Portals library not found at: ${PORTALS_LIB_DIR}")
+endif()
+
+message(STATUS "Portals library found at: ${PORTALS_LIB}")
+set(PORT_LIB "${PROJECT_NAME}_portals_lib")
+
+# Handle include directory
+if(PORTALS_INCLUDE_DIR)
+  # Use provided include directory
+  if(NOT EXISTS "${PORTALS_INCLUDE_DIR}/portals4.h")
+    message(FATAL_ERROR "Could not find portals4.h in specified include directory: ${PORTALS_INCLUDE_DIR}")
+  endif()
+else()
+  # Try to infer include directory from library location
+  get_filename_component(PORTALS_LIB_DIR_PARENT ${PORTALS_LIB} DIRECTORY)
+  set(POSSIBLE_INCLUDE_DIRS
+      "${PORTALS_LIB_DIR_PARENT}/include"
+      "${PORTALS_LIB_DIR_PARENT}/../include"
+      "${PORTALS_LIB_DIR_PARENT}/../../include"
+      "${PORTALS_LIB_DIR_PARENT}/../portals/include"
+      "${PORTALS_LIB_DIR_PARENT}/../../portals/include")
+
+  # Search for portals4.h in possible locations
+  set(FOUND_INCLUDE_DIR FALSE)
+  foreach(DIR ${POSSIBLE_INCLUDE_DIRS})
+    if(EXISTS "${DIR}/portals4.h")
+      set(PORTALS_INCLUDE_DIR "${DIR}")
+      set(FOUND_INCLUDE_DIR TRUE)
+      break()
+    endif()
+  endforeach()
+
+  if(NOT FOUND_INCLUDE_DIR)
+    message(FATAL_ERROR "Could not find portals4.h in any standard location relative to ${PORTALS_LIB}")
+  endif()
+endif()
+
+message(STATUS "Portals include directory: ${PORTALS_INCLUDE_DIR}")
+
 
 
 # Add executable
