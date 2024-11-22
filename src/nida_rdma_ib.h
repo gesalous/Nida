@@ -34,6 +34,7 @@ struct ib_pd *__nida_ib_alloc_pd(struct ib_device *device, unsigned int flags,
  */
 static inline void nida_ib_dealloc_pd(struct ib_pd *pd)
 {
+  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
 	int ret = ib_dealloc_pd_user(pd, NULL);
 
 	WARN_ONCE(ret, "Destroy of kernel PD shouldn't fail");
@@ -50,6 +51,7 @@ static inline u64 nida_ib_dma_map_single(struct ib_device *dev,
 				    void *cpu_addr, size_t size,
 				    enum dma_data_direction direction)
 {
+  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
 	if (ib_uses_virt_dma(dev))
 		return (uintptr_t)cpu_addr;
 	return dma_map_single(dev->dma_device, cpu_addr, size, direction);
@@ -63,6 +65,7 @@ static inline u64 nida_ib_dma_map_single(struct ib_device *dev,
  */
 static inline int nida_ib_dma_mapping_error(struct ib_device *dev, u64 dma_addr)
 {
+  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
 	if (ib_uses_virt_dma(dev))
 		return 0;
 	return dma_mapping_error(dev->dma_device, dma_addr);
@@ -79,6 +82,7 @@ static inline void nida_ib_dma_unmap_single(struct ib_device *dev,
 				       u64 addr, size_t size,
 				       enum dma_data_direction direction)
 {
+  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
 	if (!ib_uses_virt_dma(dev))
 		dma_unmap_single(dev->dma_device, addr, size, direction);
 }
