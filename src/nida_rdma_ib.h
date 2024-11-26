@@ -86,4 +86,19 @@ static inline void nida_ib_dma_unmap_single(struct ib_device *dev,
 	if (!ib_uses_virt_dma(dev))
 		dma_unmap_single(dev->dma_device, addr, size, direction);
 }
+
+static inline int nida_ib_post_send(struct ib_qp *qp,
+                                    const struct ib_send_wr *send_wr,
+                                    const struct ib_send_wr **bad_send_wr) {
+  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
+  return ib_post_send(qp, send_wr, bad_send_wr);
+}
+
+static inline int nida_ib_post_recv(struct ib_qp *qp,
+                                    const struct ib_recv_wr *recv_wr,
+                                    const struct ib_recv_wr **bad_recv_wr) {
+  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
+  return ib_post_recv(qp, recv_wr, bad_recv_wr);
+}
+
 #endif

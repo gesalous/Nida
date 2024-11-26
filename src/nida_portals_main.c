@@ -1273,7 +1273,7 @@ static int nvme_rdma_inv_rkey(struct nvme_rdma_queue *queue,
 	req->reg_cqe.done = nvme_rdma_inv_rkey_done;
 	wr.wr_cqe = &req->reg_cqe;
 
-	return ib_post_send(queue->qp, &wr, NULL);
+	return nida_ib_post_send(queue->qp, &wr, NULL);
 }
 
 static void nvme_rdma_dma_unmap_req(struct ib_device *ibdev, struct request *rq)
@@ -1676,7 +1676,7 @@ static int nvme_rdma_post_send(struct nvme_rdma_queue *queue,
 	else
 		first = &wr;
 
-	ret = ib_post_send(queue->qp, first, NULL);
+	ret = nida_ib_post_send(queue->qp, first, NULL);
 	if (unlikely(ret)) {
 		dev_err(queue->ctrl->ctrl.device,
 			     "%s failed with error code %d\n", __func__, ret);
@@ -1702,7 +1702,7 @@ static int nvme_rdma_post_recv(struct nvme_rdma_queue *queue,
 	wr.sg_list  = &list;
 	wr.num_sge  = 1;
 
-	ret = ib_post_recv(queue->qp, &wr, NULL);
+	ret = nida_ib_post_recv(queue->qp, &wr, NULL);
 	if (unlikely(ret)) {
 		dev_err(queue->ctrl->ctrl.device,
 			"%s failed with error code %d\n", __func__, ret);
@@ -2439,19 +2439,19 @@ static int __init nvme_rdma_init_module(void)
 {
 	int ret;
   pr_info("Loading portails staff.. Connecting to daemon\n");
-  // Connect to daemon first
-  ret = nvme_portails_connect_to_daemon();
-  if (ret < 0)
-    return ret;
+  // // Connect to daemon first
+  // ret = nvme_portails_connect_to_daemon();
+  // if (ret < 0)
+  //   return ret;
 
-  pr_info("Connecting to daemon DONE. Sending a test message..\n");
-  // Send initial message to daemon
-  ret = nvme_portails_send_to_daemon(1, "NVME_RDMA_INIT");
-  if (ret < 0) {
-    pr_err("Failed to send message to daemon: %d\n", ret);
-    goto err_release_sock;
-  }
-  pr_info("Sending a test message..DONE\n");
+  // pr_info("Connecting to daemon DONE. Sending a test message..\n");
+  // // Send initial message to daemon
+  // ret = nvme_portails_send_to_daemon(1, "NVME_RDMA_INIT");
+  // if (ret < 0) {
+  //   pr_err("Failed to send message to daemon: %d\n", ret);
+  //   goto err_release_sock;
+  // }
+  // pr_info("Sending a test message..DONE\n");
 
         ret = ib_register_client(&nvme_rdma_ib_client);
 	if (ret)
@@ -2465,9 +2465,9 @@ static int __init nvme_rdma_init_module(void)
 
 err_unreg_client:
 	ib_unregister_client(&nvme_rdma_ib_client);
-err_release_sock:
-  if (sock)
-    sock_release(sock);
+// err_release_sock:
+//   if (sock)
+//     sock_release(sock);
 	return ret;
 }
 
