@@ -4,7 +4,6 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/rdma_cm.h>
 
-
 const char *__attribute_const__ nida_ib_event_msg(enum ib_event_type event);
 
 
@@ -99,6 +98,96 @@ static inline int nida_ib_post_recv(struct ib_qp *qp,
                                     const struct ib_recv_wr **bad_recv_wr) {
   pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
   return ib_post_recv(qp, recv_wr, bad_recv_wr);
+}
+
+void nida_ib_free_cq(struct ib_cq *cq);
+
+
+void nida_ib_cq_pool_put(struct ib_cq *cq, unsigned int nr_cqe);
+
+
+/**
+ * ib_destroy_qp - Destroys the specified kernel QP.
+ * @qp: The QP to destroy.
+ *
+ * NOTE: for user qp use ib_destroy_qp_user with valid udata!
+ */
+static inline int nida_ib_destroy_qp(struct ib_qp *qp)
+{
+	return ib_destroy_qp_user(qp, NULL);
+}
+
+static inline struct ib_cq *nida_ib_alloc_cq(struct ib_device *dev,
+                                             void *private, int nr_cqe,
+                                             int comp_vector,
+                                             enum ib_poll_context poll_ctx) {
+  pr_info("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+  return ib_alloc_cq(dev, private, nr_cqe, comp_vector, poll_ctx);
+}
+
+
+struct ib_cq *nida_ib_cq_pool_get(struct ib_device *dev, unsigned int nr_cqe,
+			     int comp_vector_hint,
+			     enum ib_poll_context poll_ctx);
+
+
+void nida_ib_drain_qp(struct ib_qp *qp);
+
+
+/**
+ * ib_dma_map_sg - Map a scatter/gather list to DMA addresses
+ * @dev: The device for which the DMA addresses are to be created
+ * @sg: The array of scatter/gather entries
+ * @nents: The number of scatter/gather entries
+ * @direction: The direction of the DMA
+ */
+static inline int nida_ib_dma_map_sg(struct ib_device *dev,
+                                     struct scatterlist *sg, int nents,
+                                     enum dma_data_direction direction) {
+
+  pr_info("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+  return ib_dma_map_sg(dev, sg, nents, direction);
+}
+
+static inline void nida_ib_dma_unmap_sg(struct ib_device *dev,
+				   struct scatterlist *sg, int nents,
+				   enum dma_data_direction direction)
+{
+  pr_info("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+	ib_dma_unmap_sg_attrs(dev, sg, nents, direction, 0);
+}
+
+
+
+/**
+ * ib_dma_sync_single_for_cpu - Prepare DMA region to be accessed by CPU
+ * @dev: The device for which the DMA address was created
+ * @addr: The DMA address
+ * @size: The size of the region in bytes
+ * @dir: The direction of the DMA
+ */
+static inline void
+nida_ib_dma_sync_single_for_cpu(struct ib_device *dev, u64 addr, size_t size,
+                                enum dma_data_direction dir) {
+  pr_info("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+  ib_dma_sync_single_for_cpu(dev, addr, size, dir);
+}
+
+
+/**
+ * ib_dma_sync_single_for_device - Prepare DMA region to be accessed by device
+ * @dev: The device for which the DMA address was created
+ * @addr: The DMA address
+ * @size: The size of the region in bytes
+ * @dir: The direction of the DMA
+ */
+static inline void nida_ib_dma_sync_single_for_device(struct ib_device *dev,
+						 u64 addr,
+						 size_t size,
+						 enum dma_data_direction dir)
+{
+  pr_info("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+  ib_dma_sync_single_for_device(dev,addr,size,dir);
 }
 
 #endif
