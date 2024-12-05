@@ -33,7 +33,7 @@ struct ib_pd *__nida_ib_alloc_pd(struct ib_device *device, unsigned int flags,
  */
 static inline void nida_ib_dealloc_pd(struct ib_pd *pd)
 {
-  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
+  pr_info("[%s:%s:%d] IB API\n",__FILE__,__func__,__LINE__);
 	int ret = ib_dealloc_pd_user(pd, NULL);
 
 	WARN_ONCE(ret, "Destroy of kernel PD shouldn't fail");
@@ -50,10 +50,11 @@ static inline u64 nida_ib_dma_map_single(struct ib_device *dev,
 				    void *cpu_addr, size_t size,
 				    enum dma_data_direction direction)
 {
-  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
-	if (ib_uses_virt_dma(dev))
-		return (uintptr_t)cpu_addr;
-	return dma_map_single(dev->dma_device, cpu_addr, size, direction);
+  pr_info("[%s:%s:%d] IB API virtual kernel addr: %lu size: %lu\n", __FILE__, __func__,
+          __LINE__, (unsigned long)cpu_addr, size);
+  if (ib_uses_virt_dma(dev))
+    return (uintptr_t)cpu_addr;
+  return dma_map_single(dev->dma_device, cpu_addr, size, direction);
 }
 
 
@@ -64,10 +65,11 @@ static inline u64 nida_ib_dma_map_single(struct ib_device *dev,
  */
 static inline int nida_ib_dma_mapping_error(struct ib_device *dev, u64 dma_addr)
 {
-  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
-	if (ib_uses_virt_dma(dev))
-		return 0;
-	return dma_mapping_error(dev->dma_device, dma_addr);
+  // pr_info("%s:%s:%d check for error for physical dma_addr: %llu\n", __FILE__,
+  //         __func__, __LINE__, dma_addr);
+  if (ib_uses_virt_dma(dev))
+    return 0;
+  return dma_mapping_error(dev->dma_device, dma_addr);
 }
 
 /**
@@ -81,7 +83,7 @@ static inline void nida_ib_dma_unmap_single(struct ib_device *dev,
 				       u64 addr, size_t size,
 				       enum dma_data_direction direction)
 {
-  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
+  pr_info("[%s:%s:%d] IB API\n",__FILE__,__func__,__LINE__);
 	if (!ib_uses_virt_dma(dev))
 		dma_unmap_single(dev->dma_device, addr, size, direction);
 }
@@ -89,14 +91,14 @@ static inline void nida_ib_dma_unmap_single(struct ib_device *dev,
 static inline int nida_ib_post_send(struct ib_qp *qp,
                                     const struct ib_send_wr *send_wr,
                                     const struct ib_send_wr **bad_send_wr) {
-  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
+  pr_info("[%s:%s:%d] IB API\n",__FILE__,__func__,__LINE__);
   return ib_post_send(qp, send_wr, bad_send_wr);
 }
 
 static inline int nida_ib_post_recv(struct ib_qp *qp,
                                     const struct ib_recv_wr *recv_wr,
                                     const struct ib_recv_wr **bad_recv_wr) {
-  pr_info("%s:%s:%d\n",__FILE__,__func__,__LINE__);
+  pr_info("[%s:%s:%d] IB API\n",__FILE__,__func__,__LINE__);
   return ib_post_recv(qp, recv_wr, bad_recv_wr);
 }
 
@@ -121,7 +123,7 @@ static inline struct ib_cq *nida_ib_alloc_cq(struct ib_device *dev,
                                              void *private, int nr_cqe,
                                              int comp_vector,
                                              enum ib_poll_context poll_ctx) {
-  pr_info("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+  pr_info("[%s:%s:%d] IB API\n", __FILE__, __func__, __LINE__);
   return ib_alloc_cq(dev, private, nr_cqe, comp_vector, poll_ctx);
 }
 
@@ -145,7 +147,7 @@ static inline int nida_ib_dma_map_sg(struct ib_device *dev,
                                      struct scatterlist *sg, int nents,
                                      enum dma_data_direction direction) {
 
-  pr_info("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+  pr_info("[%s:%s:%d] IB API\n", __FILE__, __func__, __LINE__);
   return ib_dma_map_sg(dev, sg, nents, direction);
 }
 
@@ -153,7 +155,7 @@ static inline void nida_ib_dma_unmap_sg(struct ib_device *dev,
 				   struct scatterlist *sg, int nents,
 				   enum dma_data_direction direction)
 {
-  pr_info("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+  pr_info("[%s:%s:%d] IB API\n", __FILE__, __func__, __LINE__);
 	ib_dma_unmap_sg_attrs(dev, sg, nents, direction, 0);
 }
 
@@ -169,7 +171,7 @@ static inline void nida_ib_dma_unmap_sg(struct ib_device *dev,
 static inline void
 nida_ib_dma_sync_single_for_cpu(struct ib_device *dev, u64 addr, size_t size,
                                 enum dma_data_direction dir) {
-  pr_info("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+  pr_info("[%s:%s:%d] IB API\n", __FILE__, __func__, __LINE__);
   ib_dma_sync_single_for_cpu(dev, addr, size, dir);
 }
 
@@ -186,8 +188,23 @@ static inline void nida_ib_dma_sync_single_for_device(struct ib_device *dev,
 						 size_t size,
 						 enum dma_data_direction dir)
 {
-  pr_info("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+  pr_info("[%s:%s:%d] IB API\n", __FILE__, __func__, __LINE__);
   ib_dma_sync_single_for_device(dev,addr,size,dir);
+}
+
+
+/**
+ * ibdev_to_node - return the NUMA node for a given ib_device
+ * @dev:	device to get the NUMA node for.
+ */
+static inline int nida_ibdev_to_node(struct ib_device *ibdev)
+{
+  pr_info("[%s:%s:%d] IB API\n", __FILE__, __func__, __LINE__);
+	struct device *parent = ibdev->dev.parent;
+
+	if (!parent)
+		return NUMA_NO_NODE;
+	return dev_to_node(parent);
 }
 
 #endif

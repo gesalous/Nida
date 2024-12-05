@@ -42,10 +42,10 @@
 	(sizeof(struct scatterlist) * NVME_INLINE_METADATA_SG_CNT)
 
 //gesalous-start staff
-#include <net/sock.h>
-#include <linux/un.h>
 #include "nida.h"
-
+#include <linux/kernel.h>
+#include <linux/un.h>
+#include <net/sock.h>
 // Global socket structure
 static struct socket *sock;
 
@@ -104,6 +104,60 @@ static int nvme_portails_send_to_daemon(int type, const char *message)
 
     ret = kernel_sendmsg(sock, &msg, &iov, 1, iov.iov_len);
     return ret;
+}
+
+
+static const char *nvme_portails_opcode_to_string(u8 opcode) {
+  switch (opcode) {
+  case nvme_cmd_flush:
+    return "FLUSH";
+  case nvme_cmd_write:
+    return "WRITE";
+  case nvme_cmd_read:
+    return "READ";
+  case nvme_cmd_write_uncor:
+    return "UNCOR";
+  case nvme_cmd_compare:
+    return "COMPARE";
+  case nvme_cmd_write_zeroes:
+    return "WRITE ZEROES";
+  case nvme_cmd_dsm:
+    return "DSM";
+  case nvme_cmd_verify:
+    return "VERIFY";
+  case nvme_cmd_resv_report:
+    return "RESV_REPORT";
+  case nvme_cmd_resv_release:
+    return "RESV_RELEASE";
+  case nvme_cmd_zone_mgmt_send:
+    return "ZONE_MGMT_SEND";
+  case nvme_cmd_zone_mgmt_recv:
+    return "ZONE_MGMT_RECV";
+  case nvme_cmd_zone_append:
+    return "ZONE_APPEND";
+  case nvme_cmd_vendor_start:
+    return "START";
+  default:
+    return "UNKNOWN";
+  }
+}
+
+static void nvme_portails_print_nvme_cmd(struct nvme_command *cmd) {
+    pr_info("gesalous: NVMe Command Structure:\n");
+    pr_info("gesalous: Common Command Format:\n");
+    pr_info("gesalous:  opcode:     0x%02x (%s)\n", cmd->common.opcode,
+            nvme_portails_opcode_to_string(cmd->common.opcode));
+    pr_info("gesalous: flags:      0x%02x\n", cmd->common.flags);
+    pr_info("gesalous:  command_id: 0x%04x\n", cmd->common.command_id);
+    pr_info("gesalous:  nsid:       0x%08x\n", le32_to_cpu(cmd->common.nsid));
+    pr_info("gesalous:  cdw2:       0x%08x\n", le32_to_cpu(cmd->common.cdw2[0]));
+    pr_info("gesalous:  metadata:   0x%016llx\n", le64_to_cpu(cmd->common.metadata));
+    pr_info("gesalous:  cdw10:      0x%08x\n", le32_to_cpu(cmd->common.cdw10));
+    pr_info("gesalous:  cdw11:      0x%08x\n", le32_to_cpu(cmd->common.cdw11));
+    pr_info("gesalous:  cdw12:      0x%08x\n", le32_to_cpu(cmd->common.cdw12));
+    pr_info("gesalous:  cdw13:      0x%08x\n", le32_to_cpu(cmd->common.cdw13));
+    pr_info("gesalous:  cdw14:      0x%08x\n", le32_to_cpu(cmd->common.cdw14));
+    pr_info("gesalous:  cdw15:      0x%08x\n", le32_to_cpu(cmd->common.cdw15));
 }
 //gesalous-end
 
@@ -251,15 +305,17 @@ static void nvme_rdma_free_qe(struct ib_device *ibdev, struct nvme_rdma_qe *qe,
 static int nvme_rdma_alloc_qe(struct ib_device *ibdev, struct nvme_rdma_qe *qe,
 		size_t capsule_size, enum dma_data_direction dir)
 {
-	qe->data = kzalloc(capsule_size, GFP_KERNEL);
-	if (!qe->data)
-		return -ENOMEM;
+  pr_info("[%s:%s:%d] xxxxxx    Allocating a new Queue Element\n", __FILE__,
+          __func__, __LINE__);
+  qe->data = kzalloc(capsule_size, GFP_KERNEL);
+  if (!qe->data)
+    return -ENOMEM;
 
-	qe->dma = nida_ib_dma_map_single(ibdev, qe->data, capsule_size, dir);
-	if (nida_ib_dma_mapping_error(ibdev, qe->dma)) {
-		kfree(qe->data);
-		qe->data = NULL;
-		return -ENOMEM;
+  qe->dma = nida_ib_dma_map_single(ibdev, qe->data, capsule_size, dir);
+  if (nida_ib_dma_mapping_error(ibdev, qe->dma)) {
+    kfree(qe->data);
+    qe->data = NULL;
+    return -ENOMEM;
 	}
 
 	return 0;
@@ -280,21 +336,24 @@ static struct nvme_rdma_qe *nvme_rdma_alloc_ring(struct ib_device *ibdev,
 		size_t ib_queue_size, size_t capsule_size,
 		enum dma_data_direction dir)
 {
-	struct nvme_rdma_qe *ring;
-	int i;
+  pr_info(
+      "[%s:%s:%d] xxxxx  Allocating this ring staff its ib_queue_size = %lu\n",
+      __FILE__, __func__, __LINE__, ib_queue_size);
+  struct nvme_rdma_qe *ring;
+  int i;
 
-	ring = kcalloc(ib_queue_size, sizeof(struct nvme_rdma_qe), GFP_KERNEL);
-	if (!ring)
-		return NULL;
+  ring = kcalloc(ib_queue_size, sizeof(struct nvme_rdma_qe), GFP_KERNEL);
+  if (!ring)
+    return NULL;
 
-	/*
-	 * Bind the CQEs (post recv buffers) DMA mapping to the RDMA queue
-	 * lifetime. It's safe, since any chage in the underlying RDMA device
-	 * will issue error recovery and queue re-creation.
-	 */
-	for (i = 0; i < ib_queue_size; i++) {
-		if (nvme_rdma_alloc_qe(ibdev, &ring[i], capsule_size, dir))
-			goto out_free_ring;
+  /*
+   * Bind the CQEs (post recv buffers) DMA mapping to the RDMA queue
+   * lifetime. It's safe, since any chage in the underlying RDMA device
+   * will issue error recovery and queue re-creation.
+   */
+  for (i = 0; i < ib_queue_size; i++) {
+    if (nvme_rdma_alloc_qe(ibdev, &ring[i], capsule_size, dir))
+      goto out_free_ring;
 	}
 
 	return ring;
@@ -353,6 +412,7 @@ static int nvme_rdma_create_qp(struct nvme_rdma_queue *queue, const int factor)
 static void nvme_rdma_exit_request(struct blk_mq_tag_set *set,
 		struct request *rq, unsigned int hctx_idx)
 {
+  pr_info("[%s:%s:%d] Main block driver callback: RDMA exit rq\n",__FILE__,__func__,__LINE__);
 	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
 
 	kfree(req->sqe.data);
@@ -362,6 +422,7 @@ static int nvme_rdma_init_request(struct blk_mq_tag_set *set,
 		struct request *rq, unsigned int hctx_idx,
 		unsigned int numa_node)
 {
+  pr_info("[%s:%s:%d] Main block driver callback: Init RDMA request\n",__FILE__,__func__,__LINE__);
 	struct nvme_rdma_ctrl *ctrl = to_rdma_ctrl(set->driver_data);
 	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
 	int queue_idx = (set == &ctrl->tag_set) ? hctx_idx + 1 : 0;
@@ -387,6 +448,7 @@ static int nvme_rdma_init_request(struct blk_mq_tag_set *set,
 static int nvme_rdma_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
 		unsigned int hctx_idx)
 {
+  pr_info("[%s:%s:%d] Main block driver callback: Init hctx\n",__FILE__,__func__,__LINE__);
 	struct nvme_rdma_ctrl *ctrl = to_rdma_ctrl(data);
 	struct nvme_rdma_queue *queue = &ctrl->queues[hctx_idx + 1];
 
@@ -434,6 +496,7 @@ static int nvme_rdma_dev_get(struct nvme_rdma_device *dev)
 static struct nvme_rdma_device *
 nvme_rdma_find_get_device(struct rdma_cm_id *cm_id)
 {
+  pr_info("[%s:%s:%d] Searching (and returning) an nvme_rdma_device * from the given rdma_cm_id....\n",__FILE__,__func__,__LINE__);
 	struct nvme_rdma_device *ndev;
 
 	mutex_lock(&device_list_mutex);
@@ -530,6 +593,7 @@ static int nvme_rdma_get_max_fr_pages(struct ib_device *ibdev, bool pi_support)
 static int nvme_rdma_create_cq(struct ib_device *ibdev,
 		struct nvme_rdma_queue *queue)
 {
+  pr_info("[%s:%s:%d] Creating completion queues....\n",__FILE__,__func__,__LINE__);
 	int ret, comp_vector, idx = nvme_rdma_queue_idx(queue);
 
 	/*
@@ -556,6 +620,7 @@ static int nvme_rdma_create_cq(struct ib_device *ibdev,
 
 static int nvme_rdma_create_queue_ib(struct nvme_rdma_queue *queue)
 {
+  pr_info("[%s:%s:%d] **CREATING** the actual RDMA *IB* QUEUE\n",__FILE__,__func__,__LINE__);
 	struct ib_device *ibdev;
 	const int send_wr_factor = 3;			/* MR, SEND, INV */
 	const int cq_factor = send_wr_factor + 1;	/* + RECV */
@@ -637,33 +702,40 @@ out_put_dev:
 static int nvme_rdma_alloc_queue(struct nvme_rdma_ctrl *ctrl,
 		int idx, size_t queue_size)
 {
-	struct nvme_rdma_queue *queue;
-	struct sockaddr *src_addr = NULL;
-	int ret;
+  pr_info("[%s:%s:%d] *ALLOCATING* (NOT CREATING LATER...) a new queue for "
+          "RDMA with idx: %d and queue size: %lu\n",
+          __FILE__, __func__, __LINE__, idx, queue_size);
+  struct nvme_rdma_queue *queue;
+  struct sockaddr *src_addr = NULL;
+  int ret;
 
-	queue = &ctrl->queues[idx];
-	mutex_init(&queue->queue_lock);
-	queue->ctrl = ctrl;
-	if (idx && ctrl->ctrl.max_integrity_segments)
-		queue->pi_support = true;
-	else
-		queue->pi_support = false;
-	init_completion(&queue->cm_done);
+  queue = &ctrl->queues[idx];
+  mutex_init(&queue->queue_lock);
+  queue->ctrl = ctrl;
+  if (idx && ctrl->ctrl.max_integrity_segments)
+    queue->pi_support = true;
+  else
+    queue->pi_support = false;
+  init_completion(&queue->cm_done);
 
-	if (idx > 0)
-		queue->cmnd_capsule_len = ctrl->ctrl.ioccsz * 16;
-	else
-		queue->cmnd_capsule_len = sizeof(struct nvme_command);
+  if (idx > 0)
+    queue->cmnd_capsule_len = ctrl->ctrl.ioccsz * 16;
+  else
+    queue->cmnd_capsule_len = sizeof(struct nvme_command);
 
-	queue->queue_size = queue_size;
+  queue->queue_size = queue_size;
 
-	queue->cm_id = nida_rdma_create_id(&init_net, nvme_rdma_cm_handler, queue,
-			RDMA_PS_TCP, IB_QPT_RC);
-	if (IS_ERR(queue->cm_id)) {
-		dev_info(ctrl->ctrl.device,
-			"failed to create CM ID: %ld\n", PTR_ERR(queue->cm_id));
-		ret = PTR_ERR(queue->cm_id);
-		goto out_destroy_mutex;
+  pr_info("[%s:%s:%d] Ok creating a new RDMA connection id registering the "
+          "handler to create the queue later\n",
+          __FILE__, __func__, __LINE__);
+
+  queue->cm_id = nida_rdma_create_id(&init_net, nvme_rdma_cm_handler, queue,
+                                     RDMA_PS_TCP, IB_QPT_RC);
+  if (IS_ERR(queue->cm_id)) {
+    dev_info(ctrl->ctrl.device, "failed to create CM ID: %ld\n",
+             PTR_ERR(queue->cm_id));
+    ret = PTR_ERR(queue->cm_id);
+    goto out_destroy_mutex;
 	}
 
 	if (ctrl->ctrl.opts->mask & NVMF_OPT_HOST_TRADDR)
@@ -679,12 +751,14 @@ static int nvme_rdma_alloc_queue(struct nvme_rdma_ctrl *ctrl,
 		goto out_destroy_cm_id;
 	}
 
+  pr_info("[%s:%s:%d] Waiting for cm id to finish....\n",__FILE__,__func__,__LINE__);
 	ret = nvme_rdma_wait_for_cm(queue);
 	if (ret) {
 		dev_info(ctrl->ctrl.device,
 			"rdma connection establishment failed (%d)\n", ret);
 		goto out_destroy_cm_id;
 	}
+  pr_info("[%s:%s:%d] Waiting for cm id to finish....DONE\n",__FILE__,__func__,__LINE__);
 
 	set_bit(NVME_RDMA_Q_ALLOCATED, &queue->flags);
 
@@ -788,7 +862,10 @@ static int nvme_rdma_alloc_io_queues(struct nvme_rdma_ctrl *ctrl)
 	int i, ret;
 
 	nr_io_queues = nvmf_nr_io_queues(opts);
-	ret = nvme_set_queue_count(&ctrl->ctrl, &nr_io_queues);
+
+  pr_info("[%s:%s:%d] *ALLOCATING* IO QUEUES number = %u\n",__FILE__,__func__,__LINE__,nr_io_queues);
+	
+  ret = nvme_set_queue_count(&ctrl->ctrl, &nr_io_queues);
 	if (ret)
 		return ret;
 
@@ -848,6 +925,7 @@ static void nvme_rdma_destroy_admin_queue(struct nvme_rdma_ctrl *ctrl)
 static int nvme_rdma_configure_admin_queue(struct nvme_rdma_ctrl *ctrl,
 		bool new)
 {
+  pr_info("[%s:%s:%d] Allocating the *ADMIN* queue\n",__FILE__,__func__,__LINE__);
 	bool pi_capable = false;
 	int error;
 
@@ -856,7 +934,7 @@ static int nvme_rdma_configure_admin_queue(struct nvme_rdma_ctrl *ctrl,
 		return error;
 
 	ctrl->device = ctrl->queues[0].device;
-	ctrl->ctrl.numa_node = ibdev_to_node(ctrl->device->dev);
+	ctrl->ctrl.numa_node = nida_ibdev_to_node(ctrl->device->dev);
 
 	/* T10-PI support */
 	if (ctrl->device->dev->attrs.kernel_cap_flags &
@@ -1072,17 +1150,20 @@ static void nvme_rdma_reconnect_or_remove(struct nvme_rdma_ctrl *ctrl)
 
 static int nvme_rdma_setup_ctrl(struct nvme_rdma_ctrl *ctrl, bool new)
 {
-	int ret;
-	bool changed;
+  pr_info("[%s:%s:%d] Setting up the DAMN controller gonna create ADMIN QUEUE "
+          "and probably two IO QUEUES\n",
+          __FILE__, __func__, __LINE__);
+  int ret;
+  bool changed;
 
-	ret = nvme_rdma_configure_admin_queue(ctrl, new);
-	if (ret)
-		return ret;
+  ret = nvme_rdma_configure_admin_queue(ctrl, new);
+  if (ret)
+    return ret;
 
-	if (ctrl->ctrl.icdoff) {
-		ret = -EOPNOTSUPP;
-		dev_err(ctrl->ctrl.device, "icdoff is not supported!\n");
-		goto destroy_admin;
+  if (ctrl->ctrl.icdoff) {
+    ret = -EOPNOTSUPP;
+    dev_err(ctrl->ctrl.device, "icdoff is not supported!\n");
+    goto destroy_admin;
 	}
 
 	if (!(ctrl->ctrl.sgls & (1 << 2))) {
@@ -1591,6 +1672,7 @@ out_free_table:
 static int nvme_rdma_map_data(struct nvme_rdma_queue *queue,
 		struct request *rq, struct nvme_command *c)
 {
+  pr_info("[%s:%s:%d] xxxxx Mapping data to pshysical addresses\n",__FILE__,__func__,__LINE__);
 	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
 	struct nvme_rdma_device *dev = queue->device;
 	struct ib_device *ibdev = dev->dev;
@@ -1643,6 +1725,7 @@ out_dma_unmap_req:
 
 static void nvme_rdma_send_done(struct ib_cq *cq, struct ib_wc *wc)
 {
+  pr_info("[%s:%s:%d] SEND DONE\n", __FILE__, __func__, __LINE__);
 	struct nvme_rdma_qe *qe =
 		container_of(wc->wr_cqe, struct nvme_rdma_qe, cqe);
 	struct nvme_rdma_request *req =
@@ -1735,8 +1818,9 @@ static void nvme_rdma_submit_async_event(struct nvme_ctrl *arg)
 	struct nvme_command *cmd = sqe->data;
 	struct ib_sge sge;
 	int ret;
+  pr_info("[%s:%s:%d] MOTHER DRIVER submit_async_event\n",__FILE__,__func__,__LINE__);
 
-	nida_ib_dma_sync_single_for_cpu(dev, sqe->dma, sizeof(*cmd), DMA_TO_DEVICE);
+  nida_ib_dma_sync_single_for_cpu(dev, sqe->dma, sizeof(*cmd), DMA_TO_DEVICE);
 
 	memset(cmd, 0, sizeof(*cmd));
 	cmd->common.opcode = nvme_admin_async_event;
@@ -1799,6 +1883,8 @@ static void nvme_rdma_process_nvme_rsp(struct nvme_rdma_queue *queue,
 
 static void nvme_rdma_recv_done(struct ib_cq *cq, struct ib_wc *wc)
 {
+
+  pr_info("%s:%s:%d RECEIVE DONE\n", __FILE__, __func__, __LINE__);
 	struct nvme_rdma_qe *qe =
 		container_of(wc->wr_cqe, struct nvme_rdma_qe, cqe);
 	struct nvme_rdma_queue *queue = wc->qp->qp_context;
@@ -1878,20 +1964,25 @@ static int nvme_rdma_conn_rejected(struct nvme_rdma_queue *queue,
 
 static int nvme_rdma_addr_resolved(struct nvme_rdma_queue *queue)
 {
-	struct nvme_ctrl *ctrl = &queue->ctrl->ctrl;
-	int ret;
+  pr_info("[%s:%s:%d] Triggered from address got resolved event from "
+          "cm_handler create the IB QUEUE\n ",
+          __FILE__, __func__, __LINE__);
+  struct nvme_ctrl *ctrl = &queue->ctrl->ctrl;
+  int ret;
 
-	ret = nvme_rdma_create_queue_ib(queue);
-	if (ret)
-		return ret;
+  ret = nvme_rdma_create_queue_ib(queue);
+  if (ret)
+    return ret;
 
-	if (ctrl->opts->tos >= 0)
-		nida_rdma_set_service_type(queue->cm_id, ctrl->opts->tos);
-	ret = nida_rdma_resolve_route(queue->cm_id, NVME_RDMA_CM_TIMEOUT_MS);
-	if (ret) {
-		dev_err(ctrl->device, "nida_rdma_resolve_route failed (%d).\n",
-			queue->cm_error);
-		goto out_destroy_queue;
+  pr_info("[%s:%s:%d] Triggered from address got resolved done with the nvme_rdma_create_queue_ib\n",__FILE__,__func__,__LINE__);
+
+  if (ctrl->opts->tos >= 0)
+    nida_rdma_set_service_type(queue->cm_id, ctrl->opts->tos);
+  ret = nida_rdma_resolve_route(queue->cm_id, NVME_RDMA_CM_TIMEOUT_MS);
+  if (ret) {
+    dev_err(ctrl->device, "nida_rdma_resolve_route failed (%d).\n",
+            queue->cm_error);
+    goto out_destroy_queue;
 	}
 
 	return 0;
@@ -1959,15 +2050,27 @@ static int nvme_rdma_cm_handler(struct rdma_cm_id *cm_id,
 
 	switch (ev->event) {
 	case RDMA_CM_EVENT_ADDR_RESOLVED:
-		cm_error = nvme_rdma_addr_resolved(queue);
+    pr_info("[%s:%s:%d] <gesalous sketo>\n",__FILE__,__func__,__LINE__);
+    pr_info("[%s:%s:%d] NEW RDMA_CM_EVENT_ADDR_RESOLVED triggers nvme_rdma_addr_resolved\n",__FILE__,__func__,__LINE__);
+    cm_error = nvme_rdma_addr_resolved(queue);
+    pr_info("[%s:%s:%d] NEW RDMA_CM_EVENT_ADDR_RESOLVED triggers nvme_rdma_addr_resolved DONE\n",__FILE__,__func__,__LINE__);
+    pr_info("[%s:%s:%d] </gesalous sketo>\n",__FILE__,__func__,__LINE__);
 		break;
 	case RDMA_CM_EVENT_ROUTE_RESOLVED:
-		cm_error = nvme_rdma_route_resolved(queue);
+    pr_info("[%s:%s:%d] <gesalous sketo>\n",__FILE__,__func__,__LINE__);
+    pr_info("[%s:%s:%d] NEW RDMA_CM_EVENT_ROUTE_RESOLVED triggers nvme_rdma_route_resolved\n",__FILE__,__func__,__LINE__);
+    cm_error = nvme_rdma_route_resolved(queue);
+    pr_info("[%s:%s:%d] NEW RDMA_CM_EVENT_ROUTE_RESOLVED triggers nvme_rdma_route_resolved ... DONE\n",__FILE__,__func__,__LINE__);
+    pr_info("[%s:%s:%d] </gesalous sketo>\n",__FILE__,__func__,__LINE__);
 		break;
 	case RDMA_CM_EVENT_ESTABLISHED:
+    pr_info("[%s:%s:%d] <gesalous sketo>\n",__FILE__,__func__,__LINE__);
+    pr_info("[%s:%s:%d] NEW RDMA_CM_EVENT_ESTABLISHED triggers complete\n",__FILE__,__func__,__LINE__);
 		queue->cm_error = nvme_rdma_conn_established(queue);
 		/* complete cm_done regardless of success/failure */
-		complete(&queue->cm_done);
+    complete(&queue->cm_done);
+    pr_info("[%s:%s:%d] NEW RDMA_CM_EVENT_ESTABLISHED triggers complete... DONE\n",__FILE__,__func__,__LINE__);
+    pr_info("[%s:%s:%d] </gesalous sketo>\n",__FILE__,__func__,__LINE__);
 		return 0;
 	case RDMA_CM_EVENT_REJECTED:
 		cm_error = nvme_rdma_conn_rejected(queue, ev);
@@ -2016,6 +2119,7 @@ static void nvme_rdma_complete_timed_out(struct request *rq)
 
 static enum blk_eh_timer_return nvme_rdma_timeout(struct request *rq)
 {
+  pr_info("[%s:%s:%d] Main block driver callback: RDMA timeout\n",__FILE__,__func__,__LINE__);
 	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
 	struct nvme_rdma_queue *queue = req->queue;
 	struct nvme_rdma_ctrl *ctrl = queue->ctrl;
@@ -2056,13 +2160,21 @@ static enum blk_eh_timer_return nvme_rdma_timeout(struct request *rq)
 static blk_status_t nvme_rdma_queue_rq(struct blk_mq_hw_ctx *hctx,
 		const struct blk_mq_queue_data *bd)
 {
-	struct nvme_ns *ns = hctx->queue->queuedata;
+  struct nvme_ns *ns = hctx->queue->queuedata;
 	struct nvme_rdma_queue *queue = hctx->driver_data;
-	struct request *rq = bd->rq;
-	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
-	struct nvme_rdma_qe *sqe = &req->sqe;
+	struct request *rq = bd->rq;//gesalous the "block" request
+	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);//next to the blk request (rq) is the nvme something like that
+	struct nvme_rdma_qe *sqe = &req->sqe;//gesalous you will see it either as sqe or req->sqe it's the same
 	struct nvme_command *c = nvme_req(rq)->cmd;
-	struct ib_device *dev;
+
+  /*gesalous start*/
+  pr_info("[%s:%s:%d] Main block driver callback: Queueing an NVMe "
+          "command at queue idx: %u\n",
+          __FILE__, __func__, __LINE__, nvme_rdma_queue_idx(queue));
+  nvme_portails_print_nvme_cmd(c);
+  /*gesalous end*/
+
+  struct ib_device *dev;
 	bool queue_ready = test_bit(NVME_RDMA_Q_LIVE, &queue->flags);
 	blk_status_t ret;
 	int err;
@@ -2136,6 +2248,7 @@ unmap_qe:
 
 static int nvme_rdma_poll(struct blk_mq_hw_ctx *hctx, struct io_comp_batch *iob)
 {
+  pr_info("[%s:%s:%d] Main block driver callback: POLL RDMA\n",__FILE__,__func__,__LINE__);
 	struct nvme_rdma_queue *queue = hctx->driver_data;
 
 	return ib_process_cq_direct(queue->ib_cq, -1);
@@ -2174,6 +2287,7 @@ static void nvme_rdma_check_pi_status(struct nvme_rdma_request *req)
 
 static void nvme_rdma_complete_rq(struct request *rq)
 {
+  pr_info("[%s:%s:%d] Main block driver callback: Complete request\n",__FILE__,__func__,__LINE__);
 	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
 	struct nvme_rdma_queue *queue = req->queue;
 	struct ib_device *ibdev = queue->device->dev;
@@ -2189,6 +2303,7 @@ static void nvme_rdma_complete_rq(struct request *rq)
 
 static void nvme_rdma_map_queues(struct blk_mq_tag_set *set)
 {
+  pr_info("[%s:%s:%d] Main block driver callback: MAP queues and staff\n",__FILE__,__func__,__LINE__);
 	struct nvme_rdma_ctrl *ctrl = to_rdma_ctrl(set->driver_data);
 
 	nvmf_map_queues(set, &ctrl->ctrl, ctrl->io_queues);
@@ -2439,7 +2554,7 @@ static struct ib_client nvme_rdma_ib_client = {
 static int __init nvme_rdma_init_module(void)
 {
 	int ret;
-  pr_info("Loading portails staff.. Connecting to daemon\n");
+  pr_info("[%s:%s:%d] Loading portails staff.. Connecting to daemon\n", __FILE__,__func__,__LINE__);
   // // Connect to daemon first
   // ret = nvme_portails_connect_to_daemon();
   // if (ret < 0)
