@@ -28,6 +28,7 @@
 #include <nvme.h>
 #include <fabrics.h>
 
+extern int PtlInit(void);
 
 #define NVME_RDMA_CM_TIMEOUT_MS		3000		/* 3 second */
 
@@ -2506,6 +2507,7 @@ static int __init nvme_rdma_init_module(void)
 	if (ret)
 		goto err_unreg_client;
 
+  PtlInit();
 	return 0;
 
 err_unreg_client:
